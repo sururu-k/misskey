@@ -602,6 +602,13 @@ export class ApInboxService {
 	private async rejectFollow(actor: MiRemoteUser, activity: IFollow): Promise<string> {
 		// ※ activityはこっちから投げたフォローリクエストなので、activity.actorは存在するローカルユーザーである必要がある
 
+		// Validate that the rejecting actor is the target of the Follow
+		// (i.e., the person being followed is the one rejecting)
+		const followTargetId = getApId(activity.object);
+		if (actor.uri !== followTargetId) {
+			return `skip: reject actor ${actor.uri} does not match follow target ${followTargetId}`;
+		}
+
 		const follower = await this.apDbResolverService.getUserFromApId(activity.actor);
 
 		if (follower == null) {

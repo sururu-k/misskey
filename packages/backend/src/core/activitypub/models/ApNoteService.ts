@@ -186,7 +186,7 @@ export class ApNoteService {
 		let text: string | null = null;
 		if (note.source?.mediaType === 'text/x.misskeymarkdown' && typeof note.source.content === 'string') {
 			text = note.source.content;
-		} else if (typeof note._misskey_content !== 'undefined') {
+		} else if (typeof note._misskey_content === 'string') {
 			text = note._misskey_content;
 		} else if (typeof note.content === 'string') {
 			text = this.apMfmService.htmlToMfm(note.content, note.tag);

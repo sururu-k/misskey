@@ -191,7 +191,8 @@ export class ApPersonService implements OnModuleInit {
 			if (!(typeof x.name === 'string' && x.name.length > 0)) {
 				throw new Error('invalid Actor: wrong name');
 			}
-			x.name = truncate(x.name, nameLength);
+			// Strip HTML tags from actor name to prevent stored XSS
+			x.name = truncate(x.name.replace(/<[^>]*>/g, ''), nameLength);
 		} else if (x.name === '') {
 			// Mastodon emits empty string when the name is not set.
 			x.name = undefined;

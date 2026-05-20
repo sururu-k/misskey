@@ -213,8 +213,8 @@ export default class Connection {
 				return;
 			}
 
-			// 公開範囲がフォロワーで自分がフォロワーでない
-			if (data.body.visibility === 'followers' && !Object.hasOwn(this.following, data.body.userId)) {
+			// 公開範囲がフォロワーで自分がフォロワーでもメンション先でもない
+			if (data.body.visibility === 'followers' && !Object.hasOwn(this.following, data.body.userId) && !(data.body.mentions?.includes(this.user!.id))) {
 				return;
 			}
 		}

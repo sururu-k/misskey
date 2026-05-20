@@ -281,9 +281,8 @@ export class QueryService {
 					}))
 				// または 自分自身
 					.orWhere('note.userId = :meId')
-				// または 自分宛て
+				// または 自分宛て (specified visibility)
 					.orWhere(':meIdAsList <@ note.visibleUserIds')
-					.orWhere(':meIdAsList <@ note.mentions')
 					.orWhere(new Brackets(qb => {
 						qb
 						// または フォロワー宛ての投稿であり、
@@ -293,7 +292,9 @@ export class QueryService {
 								// 自分がフォロワーである
 									.where(`note.userId IN (${ followingQuery.getQuery() })`)
 								// または 自分の投稿へのリプライ
-									.orWhere('note.replyUserId = :meId');
+									.orWhere('note.replyUserId = :meId')
+								// または 自分へのメンション
+									.orWhere(':meIdAsList <@ note.mentions');
 							}));
 					}));
 			}));

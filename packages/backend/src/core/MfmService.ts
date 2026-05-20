@@ -109,6 +109,10 @@ export class MfmService {
 							if (!href) {
 								return txt;
 							}
+							// Reject non-http(s) schemes to prevent javascript: XSS
+							if (!href.match(/^https?:\/\//)) {
+								return txt || '';
+							}
 							if (!txt || txt === href) {	// #6383: Missing text node
 								if (href.match(urlRegexFull)) {
 									return href;

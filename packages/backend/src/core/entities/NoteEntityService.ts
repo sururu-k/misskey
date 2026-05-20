@@ -317,7 +317,17 @@ export class NoteEntityService implements OnModuleInit {
 				in which case we can never know the following. Instead we have
 				to assume that the users are following each other.
 				*/
-				return following > 0 || (note.userHost != null && user.host != null);
+				if (following > 0) return true;
+
+				// Both remote: we cannot verify the relationship locally,
+				// but still must not bypass followers-only / specified visibility.
+				// A malicious remote server could send an Announce of a followers-only
+				// note with to:[AS#Public], causing it to be treated as publicly visible.
+				if (note.userHost != null && user.host != null) {
+					return note.visibility !== 'followers' && note.visibility !== 'specified';
+				}
+
+				return false;
 			}
 		}
 

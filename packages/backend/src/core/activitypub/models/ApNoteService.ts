@@ -7,7 +7,7 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { In } from 'typeorm';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
-import type { PollsRepository, EmojisRepository, MiMeta } from '@/models/_.js';
+import type { PollsRepository, EmojisRepository, BlockingsRepository, MiMeta } from '@/models/_.js';
 import type { Config } from '@/config.js';
 import type { MiRemoteUser } from '@/models/User.js';
 import type { MiNote } from '@/models/Note.js';
@@ -57,6 +57,9 @@ export class ApNoteService {
 
 		@Inject(DI.emojisRepository)
 		private emojisRepository: EmojisRepository,
+
+		@Inject(DI.blockingsRepository)
+		private blockingsRepository: BlockingsRepository,
 
 		private idService: IdService,
 		private apMfmService: ApMfmService,
@@ -310,6 +313,21 @@ export class ApNoteService {
 		});
 
 		const apEmojis = emojis.map(emoji => emoji.name);
+
+		// Check blocking: if the reply target user has blocked the note author, skip creating the note.
+		// The C2S API path does this check (NoteCreateService), but the S2S (federation) path did not,
+		// allowing a remote user to bypass block restrictions when replying via ActivityPub.
+		if (reply && reply.userId !== actor.id) {
+			const blockExist = await this.blockingsRepository.exists({
+				where: {
+					blockerId: reply.userId,
+					blockeeId: actor.id,
+				},
+			});
+			if (blockExist) {
+				throw new IdentifiableError('b0df6025-f2e8-44b4-a26a-17ad99104612', 'Reply target user has blocked the note author');
+			}
+		}
 
 		try {
 			return await this.noteCreateService.create(actor, {

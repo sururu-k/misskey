@@ -8,6 +8,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { SystemWebhookEntityService } from '@/core/entities/SystemWebhookEntityService.js';
 import { systemWebhookEventTypes } from '@/models/SystemWebhook.js';
 import { SystemWebhookService } from '@/core/SystemWebhookService.js';
+import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
 	tags: ['admin', 'system-webhook'],
@@ -16,6 +18,14 @@ export const meta = {
 	requireModerator: true,
 	secure: true,
 	kind: 'write:admin:system-webhook',
+
+	errors: {
+		invalidUrl: {
+			message: 'The webhook URL is invalid or resolves to a private address.',
+			code: 'INVALID_URL',
+			id: 'b89fd7fe-2b6a-4a3c-9c8e-e5c3a4e1d7f2',
+		},
+	},
 
 	res: {
 		type: 'object',
@@ -65,8 +75,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private systemWebhookService: SystemWebhookService,
 		private systemWebhookEntityService: SystemWebhookEntityService,
+		private httpRequestService: HttpRequestService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			let parsedUrl: URL;
+			try {
+				parsedUrl = new URL(ps.url);
+			} catch {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+			if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+			try {
+				await this.httpRequestService.validateUrlNotPrivate(ps.url);
+			} catch {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+
 			const result = await this.systemWebhookService.createSystemWebhook(
 				{
 					isActive: ps.isActive,

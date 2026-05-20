@@ -397,7 +397,8 @@ async function createPluginEnv(opts: { plugin: Plugin; storageKey: string }): Pr
 			addPluginHandler(id, 'user_action', {
 				title: title.value,
 				handler: (user) => withContext(ctx => {
-					ctx.execFn(handler, [utils.jsToVal(user)]);
+					const { token, ...safeUser } = user as any;
+					ctx.execFn(handler, [utils.jsToVal(safeUser)]);
 				}),
 			});
 		}),

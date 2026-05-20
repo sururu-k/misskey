@@ -1050,6 +1050,9 @@ async function post(ev?: PointerEvent) {
 	// plugin
 	const notePostInterruptors = getPluginHandlers('note_post_interruptor');
 	if (notePostInterruptors.length > 0) {
+		const savedVisibility = postData.visibility;
+		const savedLocalOnly = postData.localOnly;
+		const savedVisibleUserIds = postData.visibleUserIds;
 		for (const interruptor of notePostInterruptors) {
 			try {
 				postData = await interruptor.handler(deepClone(postData)) as typeof postData;
@@ -1057,6 +1060,10 @@ async function post(ev?: PointerEvent) {
 				console.error(err);
 			}
 		}
+		// Prevent plugins from escalating note visibility
+		postData.visibility = savedVisibility;
+		postData.localOnly = savedLocalOnly;
+		postData.visibleUserIds = savedVisibleUserIds;
 	}
 
 	let token: string | undefined = undefined;

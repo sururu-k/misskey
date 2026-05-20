@@ -100,14 +100,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.pendingSession);
 			}
 
+			// Atomically delete session to prevent concurrent token retrieval
+			const deleteResult = await this.authSessionsRepository.delete(session.id);
+			if (deleteResult.affected === 0) {
+				throw new ApiError(meta.errors.noSuchSession);
+			}
+
 			// Lookup access token
 			const accessToken = await this.accessTokensRepository.findOneByOrFail({
 				appId: app.id,
 				userId: session.userId,
 			});
-
-			// Delete session
-			this.authSessionsRepository.delete(session.id);
 
 			return {
 				accessToken: accessToken.token,

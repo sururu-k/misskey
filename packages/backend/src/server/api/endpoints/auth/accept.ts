@@ -5,6 +5,7 @@
 
 import * as crypto from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AuthSessionsRepository, AppsRepository, AccessTokensRepository } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
@@ -59,6 +60,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchSession);
 			}
 
+			// Prevent re-approval: only allow if session has not been approved yet
+			if (session.userId != null) {
+				throw new ApiError(meta.errors.noSuchSession);
+			}
+
 			const accessToken = secureRndstr(32);
 
 			// Fetch exist access token
@@ -89,10 +95,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
-			// Update session
-			await this.authSessionsRepository.update(session.id, {
-				userId: me.id,
-			});
+			// Atomically update session only if userId is still null
+			const result = await this.authSessionsRepository.update(
+				{ id: session.id, userId: IsNull() },
+				{ userId: me.id },
+			);
+			if (result.affected === 0) {
+				throw new ApiError(meta.errors.noSuchSession);
+			}
 		});
 	}
 }

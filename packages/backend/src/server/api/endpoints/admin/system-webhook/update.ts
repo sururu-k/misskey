@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import dns from 'node:dns';
 import { Injectable } from '@nestjs/common';
+import ipaddr from 'ipaddr.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { SystemWebhookEntityService } from '@/core/entities/SystemWebhookEntityService.js';
 import { systemWebhookEventTypes } from '@/models/SystemWebhook.js';
 import { SystemWebhookService } from '@/core/SystemWebhookService.js';
-import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
@@ -80,7 +81,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private systemWebhookService: SystemWebhookService,
 		private systemWebhookEntityService: SystemWebhookEntityService,
-		private httpRequestService: HttpRequestService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			let parsedUrl: URL;
@@ -93,7 +93,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.invalidUrl);
 			}
 			try {
-				await this.httpRequestService.validateUrlNotPrivate(ps.url);
+				const hostname = parsedUrl.hostname;
+				if (ipaddr.isValid(hostname)) {
+					const addr = ipaddr.parse(hostname);
+					if (addr.range() !== 'unicast') {
+						throw new Error('private IP');
+					}
+				} else {
+					const { address } = await dns.promises.lookup(hostname);
+					const addr = ipaddr.parse(address);
+					if (addr.range() !== 'unicast') {
+						throw new Error('private IP');
+					}
+				}
 			} catch {
 				throw new ApiError(meta.errors.invalidUrl);
 			}

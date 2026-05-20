@@ -9,6 +9,7 @@ import type { WebhooksRepository } from '@/models/_.js';
 import { webhookEventTypes } from '@/models/Webhook.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { DI } from '@/di-symbols.js';
+import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { ApiError } from '../../../error.js';
 
 export const meta = {
@@ -23,6 +24,11 @@ export const meta = {
 			message: 'No such webhook.',
 			code: 'NO_SUCH_WEBHOOK',
 			id: 'fb0fea69-da18-45b1-828d-bd4fd1612518',
+		},
+		invalidUrl: {
+			message: 'The webhook URL is invalid or resolves to a private address.',
+			code: 'INVALID_URL',
+			id: 'a2c958c3-81a5-4d2f-a5b2-c8f92b6d3e7a',
 		},
 	},
 
@@ -52,8 +58,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private webhooksRepository: WebhooksRepository,
 
 		private globalEventService: GlobalEventService,
+		private httpRequestService: HttpRequestService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// Validate webhook URL if provided
+			if (ps.url != null) {
+				let parsedUrl: URL;
+				try {
+					parsedUrl = new URL(ps.url);
+				} catch {
+					throw new ApiError(meta.errors.invalidUrl);
+				}
+				if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+					throw new ApiError(meta.errors.invalidUrl);
+				}
+				try {
+					await this.httpRequestService.validateUrlNotPrivate(ps.url);
+				} catch {
+					throw new ApiError(meta.errors.invalidUrl);
+				}
+			}
+
 			const webhook = await this.webhooksRepository.findOneBy({
 				id: ps.webhookId,
 				userId: me.id,

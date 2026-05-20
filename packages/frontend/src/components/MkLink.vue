@@ -4,7 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
+<span v-if="!attr" style="word-break: break-all;">
+	<slot></slot>
+</span>
 <component
+	v-else
 	:is="self ? 'MkA' : 'a'" ref="el" style="word-break: break-all;" class="_link" :[attr]="maybeRelativeUrl" :rel="rel ?? 'nofollow noopener'" :target="target"
 	:behavior="props.navigationBehavior"
 	:title="url"
@@ -30,9 +34,18 @@ const props = withDefaults(defineProps<{
 }>(), {
 });
 
-const maybeRelativeUrl = maybeMakeRelative(props.url, local);
-const self = maybeRelativeUrl !== props.url;
-const attr = self ? 'to' : 'href';
+const isSafeUrl = (() => {
+	try {
+		const parsed = new URL(props.url);
+		return ['http:', 'https:'].includes(parsed.protocol);
+	} catch {
+		return false;
+	}
+})();
+
+const maybeRelativeUrl = isSafeUrl ? maybeMakeRelative(props.url, local) : undefined;
+const self = isSafeUrl && maybeRelativeUrl !== props.url;
+const attr = self ? 'to' : (isSafeUrl ? 'href' : undefined);
 const target = self ? null : '_blank';
 
 const el = ref<HTMLElement | { $el: HTMLElement }>();

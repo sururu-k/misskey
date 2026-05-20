@@ -54,6 +54,10 @@ export class AuthenticateService implements OnApplicationShutdown {
 				throw new AuthenticationError('user not found');
 			}
 
+			if (user.isDeleted) {
+				throw new AuthenticationError('user is deleted');
+			}
+
 			return [user, null];
 		} else {
 			const accessToken = await this.accessTokensRepository.findOne({
@@ -76,6 +80,10 @@ export class AuthenticateService implements OnApplicationShutdown {
 				() => this.usersRepository.findOneBy({
 					id: accessToken.userId,
 				}) as Promise<MiLocalUser>);
+
+			if (user?.isDeleted) {
+				throw new AuthenticationError('user is deleted');
+			}
 
 			if (accessToken.appId) {
 				const app = await this.appCache.fetch(accessToken.appId,

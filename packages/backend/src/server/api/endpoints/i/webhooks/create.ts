@@ -11,6 +11,7 @@ import { webhookEventTypes } from '@/models/Webhook.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
+import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { ApiError } from '@/server/api/error.js';
 
 // TODO: UserWebhook schemaの適用
@@ -26,6 +27,11 @@ export const meta = {
 			message: 'You cannot create webhook any more.',
 			code: 'TOO_MANY_WEBHOOKS',
 			id: '87a9bb19-111e-4e37-81d3-a3e7426453b0',
+		},
+		invalidUrl: {
+			message: 'The webhook URL is invalid or resolves to a private address.',
+			code: 'INVALID_URL',
+			id: 'e91baab5-711e-4e39-91d3-a4e8527564c1',
 		},
 	},
 
@@ -81,8 +87,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private idService: IdService,
 		private globalEventService: GlobalEventService,
 		private roleService: RoleService,
+		private httpRequestService: HttpRequestService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// Validate webhook URL scheme and ensure it doesn't resolve to a private IP
+			let parsedUrl: URL;
+			try {
+				parsedUrl = new URL(ps.url);
+			} catch {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+			if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+			try {
+				await this.httpRequestService.validateUrlNotPrivate(ps.url);
+			} catch {
+				throw new ApiError(meta.errors.invalidUrl);
+			}
+
 			const currentWebhooksCount = await this.webhooksRepository.countBy({
 				userId: me.id,
 			});

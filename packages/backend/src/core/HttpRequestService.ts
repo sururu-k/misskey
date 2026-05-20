@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import * as dns from 'node:dns';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import * as net from 'node:net';
@@ -44,7 +45,7 @@ class HttpRequestServiceAgent extends http.Agent {
 		}
 
 		socket.on('connect', () => {
-			if (socket instanceof net.Socket && process.env.NODE_ENV === 'production') {
+			if (socket instanceof net.Socket) {
 				const address = socket.remoteAddress;
 				if (address && ipaddr.isValid(address)) {
 					if (this.isPrivateIp(address)) {
@@ -89,7 +90,7 @@ class HttpsRequestServiceAgent extends https.Agent {
 		}
 
 		socket.on('connect', () => {
-			if (socket instanceof net.Socket && process.env.NODE_ENV === 'production') {
+			if (socket instanceof net.Socket) {
 				const address = socket.remoteAddress;
 				if (address && ipaddr.isValid(address)) {
 					if (this.isPrivateIp(address)) {
@@ -307,6 +308,37 @@ export class HttpRequestService {
 	}
 
 	@bindThis
+	private isPrivateIp(ip: string): boolean {
+		const parsedIp = ipaddr.parse(ip);
+
+		for (const net of this.config.allowedPrivateNetworks ?? []) {
+			const cidr = ipaddr.parseCIDR(net);
+			if (cidr[0].kind() === parsedIp.kind() && parsedIp.match(ipaddr.parseCIDR(net))) {
+				return false;
+			}
+		}
+
+		return parsedIp.range() !== 'unicast';
+	}
+
+	@bindThis
+	public async validateUrlNotPrivate(url: string): Promise<void> {
+		const parsed = new globalThis.URL(url);
+		const hostname = parsed.hostname;
+
+		if (ipaddr.isValid(hostname)) {
+			if (this.isPrivateIp(hostname)) {
+				throw new Error(`Blocked request to private IP: ${hostname}`);
+			}
+		}
+
+		const { address } = await dns.promises.lookup(hostname);
+		if (this.isPrivateIp(address)) {
+			throw new Error(`Blocked request to private IP: ${address} (resolved from ${hostname})`);
+		}
+	}
+
+	@bindThis
 	public async send(
 		url: string,
 		args: {
@@ -330,6 +362,10 @@ export class HttpRequestService {
 		}, timeout);
 
 		const isLocalAddressAllowed = args.isLocalAddressAllowed ?? false;
+
+		if (!isLocalAddressAllowed) {
+			await this.validateUrlNotPrivate(url);
+		}
 
 		const res = await fetch(url, {
 			method: args.method ?? 'GET',

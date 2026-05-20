@@ -75,6 +75,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.accessDenied);
 			}
 
+			// Only administrators can assign roles with admin/moderator privileges
+			if ((role.isAdministrator || role.isModerator) && !(await this.roleService.isAdministrator(me))) {
+				throw new ApiError(meta.errors.accessDenied);
+			}
+
 			const user = await this.usersRepository.findOneBy({ id: ps.userId });
 			if (user == null) {
 				throw new ApiError(meta.errors.noSuchUser);

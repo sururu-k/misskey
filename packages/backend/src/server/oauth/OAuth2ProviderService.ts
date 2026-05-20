@@ -376,13 +376,16 @@ export class OAuth2ProviderService {
 					return;
 				}
 
+				// Atomically remove the code from cache to prevent concurrent use.
+				// This ensures single-use semantics per RFC 6749 §4.1.2.
+				grantCodeCache.delete(code);
+
 				// https://datatracker.ietf.org/doc/html/rfc6749.html#section-4.1.2
 				// "If an authorization code is used more than once, the authorization server
 				// MUST deny the request and SHOULD revoke (when possible) all tokens
 				// previously issued based on that authorization code."
 				if (granted.used) {
 					this.#logger.info(`Detected multiple code use from ${granted.clientId} for user ${granted.userId}. Revoking the code.`);
-					grantCodeCache.delete(code);
 					granted.revoked = true;
 					if (granted.grantedToken) {
 						await accessTokensRepository.delete({ token: granted.grantedToken });

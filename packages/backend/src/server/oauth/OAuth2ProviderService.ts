@@ -29,6 +29,7 @@ import { MemoryKVCache } from '@/misc/cache.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import Logger from '@/logger.js';
 import { StatusError } from '@/misc/status-error.js';
+import { RoleService } from '@/core/RoleService.js';
 import { HtmlTemplateService } from '@/server/web/HtmlTemplateService.js';
 import { OAuthPage } from '@/server/web/views/oauth.js';
 import type { ServerResponse } from 'node:http';
@@ -319,6 +320,7 @@ export class OAuth2ProviderService {
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 		private cacheService: CacheService,
+		private roleService: RoleService,
 		loggerService: LoggerService,
 		private htmlTemplateService: HtmlTemplateService,
 	) {
@@ -399,6 +401,20 @@ export class OAuth2ProviderService {
 				if (!body.code_verifier) return;
 				if (!(await verifyChallenge(body.code_verifier as string, granted.codeChallenge))) return;
 
+				// Filter out admin scopes for non-admin/non-moderator users to prevent
+				// privilege escalation via OAuth scope requests
+				let effectiveScopes = granted.scopes;
+				const isAdminOrModerator = await this.roleService.isModerator({ id: granted.userId });
+				if (!isAdminOrModerator) {
+					effectiveScopes = effectiveScopes.filter(s => !s.match(/^(?:read|write):admin:/));
+					this.#logger.info(`Filtered admin scopes for non-admin user ${granted.userId}. Effective scopes: [${effectiveScopes}]`);
+				}
+
+				if (!effectiveScopes.length) {
+					this.#logger.warn(`All requested scopes were admin-only for non-admin user ${granted.userId}. Denying token.`);
+					return;
+				}
+
 				const accessToken = secureRndstr(128);
 				const now = new Date();
 
@@ -410,7 +426,7 @@ export class OAuth2ProviderService {
 					token: accessToken,
 					hash: accessToken,
 					name: granted.clientId,
-					permission: granted.scopes,
+					permission: effectiveScopes,
 				});
 
 				if (granted.revoked) {
@@ -420,9 +436,9 @@ export class OAuth2ProviderService {
 				}
 
 				granted.grantedToken = accessToken;
-				this.#logger.info(`Generated access token for ${granted.clientId} for user ${granted.userId}, with scope: [${granted.scopes}]`);
+				this.#logger.info(`Generated access token for ${granted.clientId} for user ${granted.userId}, with scope: [${effectiveScopes}]`);
 
-				return [accessToken, undefined, { scope: granted.scopes.join(' ') }];
+				return [accessToken, undefined, { scope: effectiveScopes.join(' ') }];
 			})().then(args => done(null, ...args ?? []), err => done(err));
 		}));
 	}

@@ -834,7 +834,11 @@ export class NoteCreateService implements OnApplicationShutdown {
 					if (!isThreadMuted) {
 						nm.push(data.reply.userId, 'reply');
 						this.globalEventService.publishMainStream(data.reply.userId, 'reply', noteObj);
-						this.webhookService.enqueueUserWebhook(data.reply.userId, 'reply', { note: noteObj });
+
+						// Do not leak private note content to webhook owners who are not the note author
+						if (note.visibility !== 'followers' && note.visibility !== 'specified') {
+							this.webhookService.enqueueUserWebhook(data.reply.userId, 'reply', { note: noteObj });
+						}
 					}
 				}
 			}
@@ -851,7 +855,11 @@ export class NoteCreateService implements OnApplicationShutdown {
 				// Publish event
 				if ((user.id !== data.renote.userId) && data.renote.userHost === null) {
 					this.globalEventService.publishMainStream(data.renote.userId, 'renote', noteObj);
-					this.webhookService.enqueueUserWebhook(data.renote.userId, 'renote', { note: noteObj });
+
+					// Do not leak private note content to webhook owners who are not the note author
+					if (note.visibility !== 'followers' && note.visibility !== 'specified') {
+						this.webhookService.enqueueUserWebhook(data.renote.userId, 'renote', { note: noteObj });
+					}
 				}
 			}
 

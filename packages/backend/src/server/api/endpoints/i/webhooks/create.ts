@@ -27,6 +27,11 @@ export const meta = {
 			code: 'TOO_MANY_WEBHOOKS',
 			id: '87a9bb19-111e-4e37-81d3-a3e7426453b0',
 		},
+		invalidSecret: {
+			message: 'Secret must not be empty or whitespace-only.',
+			code: 'INVALID_SECRET',
+			id: 'e0a7e5a0-1c2d-4b3a-9f4e-5d6c7b8a9e0f',
+		},
 	},
 
 	res: {
@@ -83,6 +88,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			if (ps.secret != null && ps.secret.trim().length === 0) {
+				throw new ApiError(meta.errors.invalidSecret);
+			}
+
 			const currentWebhooksCount = await this.webhooksRepository.countBy({
 				userId: me.id,
 			});

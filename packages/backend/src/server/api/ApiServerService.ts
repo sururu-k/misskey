@@ -155,25 +155,29 @@ export class ApiServerService {
 		});
 
 		fastify.post<{ Params: { session: string; } }>('/miauth/:session/check', async (request, reply) => {
-			const token = await this.accessTokensRepository.findOneBy({
-				session: request.params.session,
-			});
+			// Use atomic update to prevent race conditions (token can only be fetched once)
+			const result = await this.accessTokensRepository.update(
+				{ session: request.params.session, fetched: false },
+				{ fetched: true },
+			);
 
-			if (token && token.session != null && !token.fetched) {
-				this.accessTokensRepository.update(token.id, {
-					fetched: true,
+			if (result.affected && result.affected > 0) {
+				const token = await this.accessTokensRepository.findOneBy({
+					session: request.params.session,
 				});
 
-				return {
-					ok: true,
-					token: token.token,
-					user: await this.userEntityService.pack(token.userId, null, { schema: 'UserDetailedNotMe' }),
-				};
-			} else {
-				return {
-					ok: false,
-				};
+				if (token) {
+					return {
+						ok: true,
+						token: token.token,
+						user: await this.userEntityService.pack(token.userId, null, { schema: 'UserDetailedNotMe' }),
+					};
+				}
 			}
+
+			return {
+				ok: false,
+			};
 		});
 
 		fastify.all('/clear-browser-cache', (request, reply) => {

@@ -9,6 +9,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { UsersRepository, UserProfilesRepository } from '@/models/_.js';
 import { generateNativeUserToken } from '@/misc/token.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
+import { UserAuthService } from '@/core/UserAuthService.js';
 import { DI } from '@/di-symbols.js';
 
 export const meta = {
@@ -21,6 +22,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		password: { type: 'string' },
+		token: { type: 'string', nullable: true },
 	},
 	required: ['password'],
 } as const;
@@ -35,6 +37,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userProfilesRepository: UserProfilesRepository,
 
 		private globalEventService: GlobalEventService,
+		private userAuthService: UserAuthService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const freshUser = await this.usersRepository.findOneByOrFail({ id: me.id });
@@ -47,6 +50,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (!same) {
 				throw new Error('incorrect password');
+			}
+
+			// Verify 2FA if enabled
+			if (profile.twoFactorEnabled) {
+				if (ps.token == null) {
+					throw new Error('authentication failed');
+				}
+
+				try {
+					await this.userAuthService.twoFactorAuthenticate(profile, ps.token);
+				} catch (_) {
+					throw new Error('authentication failed');
+				}
 			}
 
 			const newToken = generateNativeUserToken();

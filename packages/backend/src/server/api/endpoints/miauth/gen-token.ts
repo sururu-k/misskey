@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import * as Misskey from 'misskey-js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AccessTokensRepository } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
@@ -54,6 +55,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private notificationService: NotificationService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// Validate that requested permissions are recognized
+			const validPermissions = ps.permission.filter(
+				p => (Misskey.permissions as readonly string[]).includes(p),
+			);
+
 			// Generate access token
 			const accessToken = secureRndstr(32);
 
@@ -70,7 +76,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: ps.name,
 				description: ps.description,
 				iconUrl: ps.iconUrl,
-				permission: ps.permission,
+				permission: validPermissions,
 			});
 
 			// アクセストークンが生成されたことを通知
